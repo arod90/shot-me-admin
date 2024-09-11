@@ -15,6 +15,8 @@ export default function AddEvent() {
   const [dressCode, setDressCode] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // !TODO add user feedback when succesfully creating event, add ability to edit other fields of the event in the home page
+
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
