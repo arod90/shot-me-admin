@@ -54,8 +54,8 @@ export default function Layout({ children }) {
                     <div className="flex items-center">
                       <div className="flex-shrink-0">
                         <img
-                          className="h-8 w-8"
-                          src="https://tailwindui.com/img/logos/mark.svg?color=indigo&shade=500"
+                          className="h-12 w-12"
+                          src="https://ngjtnzaxxvrhdcgixwvf.supabase.co/storage/v1/object/public/avatars/LOGO%20SHOT%20ME%20-%20V2B.png"
                           alt="Your Company"
                         />
                       </div>
@@ -80,17 +80,17 @@ export default function Layout({ children }) {
                     </div>
                     <div className="hidden md:block">
                       <div className="ml-4 flex items-center md:ml-6">
-                        <button
+                        {/* <button
                           type="button"
                           className="relative rounded-full bg-[#151B23] p-1 text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-800"
                         >
                           <span className="absolute -inset-1.5" />
                           <span className="sr-only">View notifications</span>
                           <BellIcon className="h-6 w-6" aria-hidden="true" />
-                        </button>
+                        </button> */}
 
                         <Menu as="div" className="relative ml-3">
-                          <div>
+                          {/* <div>
                             <MenuButton className="relative flex max-w-xs items-center rounded-full bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-800">
                               <span className="absolute -inset-1.5" />
                               <span className="sr-only">Open user menu</span>
@@ -100,7 +100,7 @@ export default function Layout({ children }) {
                                 alt=""
                               />
                             </MenuButton>
-                          </div>
+                          </div> */}
                           <MenuItems className="absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
                             {userNavigation.map((item) => (
                               <MenuItem key={item.name}>

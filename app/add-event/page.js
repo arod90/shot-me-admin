@@ -14,8 +14,7 @@ export default function AddEvent() {
   const [priceTiers, setPriceTiers] = useState([{ name: '', price: '' }]);
   const [dressCode, setDressCode] = useState('');
   const [loading, setLoading] = useState(false);
-
-  // !TODO add user feedback when succesfully creating event, add ability to edit other fields of the event in the home page
+  const [feedback, setFeedback] = useState({ message: '', type: '' });
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -52,6 +51,7 @@ export default function AddEvent() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setFeedback({ message: '', type: '' });
 
     try {
       const imageUrl = await uploadImage();
@@ -77,6 +77,7 @@ export default function AddEvent() {
       if (error) throw error;
 
       console.log('Event added successfully:', data);
+      setFeedback({ message: 'Event created successfully!', type: 'success' });
       // Reset form
       setEventName('');
       setEventDate('');
@@ -89,6 +90,10 @@ export default function AddEvent() {
       setDressCode('');
     } catch (error) {
       console.error('Error adding event:', error);
+      setFeedback({
+        message: 'Error creating event. Please try again.',
+        type: 'error',
+      });
     } finally {
       setLoading(false);
     }
@@ -129,6 +134,15 @@ export default function AddEvent() {
       <h2 className="text-2xl font-bold mb-6 text-white">
         Agregar Nuevo Evento
       </h2>
+      {feedback.message && (
+        <div
+          className={`mb-4 p-2 rounded ${
+            feedback.type === 'success' ? 'bg-green-500' : 'bg-red-500'
+          }`}
+        >
+          {feedback.message}
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label
@@ -193,21 +207,6 @@ export default function AddEvent() {
             rows="3"
           ></textarea>
         </div>
-        {/* <div>
-          <label
-            htmlFor="imageUrl"
-            className="block text-sm font-medium text-gray-400"
-          >
-            URL de la Imagen
-          </label>
-          <input
-            type="url"
-            id="imageUrl"
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 p-1"
-          />
-        </div> */}
         <div>
           <label
             htmlFor="eventImage"
@@ -324,8 +323,9 @@ export default function AddEvent() {
         <button
           type="submit"
           className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          disabled={loading}
         >
-          Agregar Evento
+          {loading ? 'Agregando...' : 'Agregar Evento'}
         </button>
       </form>
     </div>
