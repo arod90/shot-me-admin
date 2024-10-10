@@ -26,6 +26,7 @@ const navigation = [
   { name: 'Agregar Evento', href: '/add-event' },
   { name: 'Usuarios', href: '/users' },
   { name: 'Emails Aprobados', href: '/add-approved-email' },
+  { name: 'Notificaciones', href: '/notifications' },
 ];
 
 const userNavigation = [
