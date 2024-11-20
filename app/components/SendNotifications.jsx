@@ -1,7 +1,6 @@
 'use client';
-
 import { useState } from 'react';
-import { supabase } from '../../lib/supabase'; // Adjust this import path as necessary
+import { supabase } from '../../lib/supabase';
 
 export default function SendNotification() {
   const [title, setTitle] = useState('');
@@ -15,17 +14,23 @@ export default function SendNotification() {
     setMessage('');
 
     try {
-      // Fetch all user tokens
+      // Fetch all valid user tokens
       const { data: users, error } = await supabase
         .from('users')
         .select('push_token')
-        .not('push_token', 'is', null);
+        .not('push_token', 'is', null)
+        .not('push_token', 'eq', ''); // Added check for empty strings
 
-      if (error) {
+      if (error)
         throw new Error('Error fetching user tokens: ' + error.message);
-      }
 
-      const tokens = users.map((user) => user.push_token);
+      const tokens = users
+        .map((user) => user.push_token)
+        .filter((token) => token && token.length > 0); // Extra validation
+
+      if (tokens.length === 0) {
+        throw new Error('No valid push tokens found');
+      }
 
       // Send notification
       const response = await fetch('/api/send-notification', {
@@ -33,20 +38,24 @@ export default function SendNotification() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ tokens, title, body }),
+        body: JSON.stringify({
+          tokens,
+          title,
+          body,
+        }),
       });
 
       const result = await response.json();
 
-      if (result.success) {
-        setMessage('Notification sent successfully!');
-        // Reset form
-        setTitle('');
-        setBody('');
-      } else {
-        throw new Error('Failed to send notification');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to send notification');
       }
+
+      setMessage('Notification sent successfully!');
+      setTitle('');
+      setBody('');
     } catch (error) {
+      console.error('Notification error:', error);
       setMessage('Error: ' + error.message);
     } finally {
       setIsLoading(false);
@@ -71,6 +80,7 @@ export default function SendNotification() {
           required
         />
       </div>
+
       <div>
         <label
           htmlFor="body"
@@ -87,6 +97,7 @@ export default function SendNotification() {
           required
         />
       </div>
+
       <button
         type="submit"
         className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -94,6 +105,7 @@ export default function SendNotification() {
       >
         {isLoading ? 'Sending...' : 'Send Notification'}
       </button>
+
       {message && (
         <p
           className={
