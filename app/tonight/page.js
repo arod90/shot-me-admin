@@ -1,10 +1,9 @@
 'use client';
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
-import { format } from 'date-fns';
-import { FiEdit2, FiTrash2 } from 'react-icons/fi';
+import { format, addHours, subHours, isWithinInterval } from 'date-fns';
 
-export default function Tonight() {
+export default function TonightPage() {
   const [events, setEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [timelineEvents, setTimelineEvents] = useState([]);
@@ -15,103 +14,92 @@ export default function Tonight() {
   });
   const [loading, setLoading] = useState(true);
   const [editingEvent, setEditingEvent] = useState(null);
+  const [expandedEvent, setExpandedEvent] = useState(null);
+
+  // Subscription refs
+  const timelineSubscriptionRef = useRef(null);
+  const checkinsSubscriptionRef = useRef(null);
+  const reactionsSubscriptionRef = useRef(null);
 
   useEffect(() => {
     fetchTodaysEvents();
+
+    const eventsSubscription = supabase
+      .channel('events-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'events' },
+        () => fetchTodaysEvents()
+      )
+      .subscribe();
+
+    return () => {
+      eventsSubscription.unsubscribe();
+      if (timelineSubscriptionRef.current) {
+        timelineSubscriptionRef.current.unsubscribe();
+      }
+      if (checkinsSubscriptionRef.current) {
+        checkinsSubscriptionRef.current.unsubscribe();
+      }
+      if (reactionsSubscriptionRef.current) {
+        reactionsSubscriptionRef.current.unsubscribe();
+      }
+    };
   }, []);
 
   useEffect(() => {
     if (selectedEvent) {
       fetchTimelineEvents();
-      subscribeToTimelineUpdates();
+      setupSubscriptions();
     }
   }, [selectedEvent]);
 
   const fetchTodaysEvents = async () => {
-    // Get current time
-    const now = new Date();
+    try {
+      const now = new Date();
 
-    // Set up start and end times
-    let startTime = new Date();
-    let endTime = new Date();
+      const { data: allEvents, error } = await supabase
+        .from('events')
+        .select('*')
+        .order('event_date', { ascending: true });
 
-    // If current time is between midnight and 3 PM, look back to previous day at 6 PM
-    if (now.getHours() >= 0 && now.getHours() <= 15) {
-      startTime.setDate(startTime.getDate() - 1); // Go back one day
-      startTime.setHours(18, 0, 0, 0); // 6 PM previous day
-      endTime.setHours(15, 0, 0, 0); // 3 PM current day
-    } else {
-      // If current time is after 3 PM, look at today 6 PM to tomorrow 3 PM
-      startTime.setHours(18, 0, 0, 0); // 6 PM today
-      endTime.setDate(endTime.getDate() + 1); // Go forward one day
-      endTime.setHours(15, 0, 0, 0); // 3 PM next day
-    }
+      if (error) throw error;
 
-    console.log('Fetching events between:', startTime, 'and', endTime);
+      const activeEvents = allEvents.filter((event) => {
+        const eventDate = new Date(event.event_date);
+        const eventWindow = {
+          start: subHours(eventDate, 2),
+          end: addHours(eventDate, 36),
+        };
+        return isWithinInterval(now, eventWindow);
+      });
 
-    const { data, error } = await supabase
-      .from('events')
-      .select('*')
-      .gte('event_date', startTime.toISOString())
-      .lte('event_date', endTime.toISOString())
-      .order('event_date', { ascending: true });
-
-    if (error) {
+      setEvents(activeEvents || []);
+      if (activeEvents?.length > 0) {
+        setSelectedEvent(activeEvents[0]);
+      }
+    } catch (error) {
       console.error('Error fetching events:', error);
-      return;
+    } finally {
+      setLoading(false);
     }
-
-    console.log('Found events:', data);
-    setEvents(data || []);
-
-    if (data && data.length > 0) {
-      setSelectedEvent(data[0]);
-    }
-    setLoading(false);
   };
 
-  const fetchTimelineEvents = async () => {
+  const setupSubscriptions = () => {
     if (!selectedEvent) return;
 
-    const { data, error } = await supabase
-      .from('timeline_events')
-      .select(
-        `
-        *,
-        users (id, first_name, last_name)
-      `
-      )
-      .eq('event_id', selectedEvent.id)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Error fetching timeline events:', error);
-      return;
+    if (timelineSubscriptionRef.current) {
+      timelineSubscriptionRef.current.unsubscribe();
+    }
+    if (checkinsSubscriptionRef.current) {
+      checkinsSubscriptionRef.current.unsubscribe();
+    }
+    if (reactionsSubscriptionRef.current) {
+      reactionsSubscriptionRef.current.unsubscribe();
     }
 
-    // Also fetch reactions for each timeline event
-    const eventsWithReactions = await Promise.all(
-      data.map(async (event) => {
-        const { data: reactions } = await supabase
-          .from('timeline_event_reactions')
-          .select('reaction')
-          .eq('timeline_event_id', event.id);
-
-        const reactionCounts = reactions?.reduce((acc, curr) => {
-          acc[curr.reaction] = (acc[curr.reaction] || 0) + 1;
-          return acc;
-        }, {});
-
-        return { ...event, reactions: reactionCounts };
-      })
-    );
-
-    setTimelineEvents(eventsWithReactions);
-  };
-
-  const subscribeToTimelineUpdates = () => {
-    const subscription = supabase
-      .channel('timeline_changes')
+    timelineSubscriptionRef.current = supabase
+      .channel(`timeline-${selectedEvent.id}`)
       .on(
         'postgres_changes',
         {
@@ -120,15 +108,91 @@ export default function Tonight() {
           table: 'timeline_events',
           filter: `event_id=eq.${selectedEvent.id}`,
         },
-        () => {
+        (payload) => {
+          console.log('Timeline event change detected:', payload);
           fetchTimelineEvents();
         }
       )
       .subscribe();
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    checkinsSubscriptionRef.current = supabase
+      .channel(`checkins-${selectedEvent.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'checkins',
+          filter: `event_id=eq.${selectedEvent.id}`,
+        },
+        () => {
+          fetchTimelineEvents();
+          fetchCheckedInPeople();
+        }
+      )
+      .subscribe();
+
+    reactionsSubscriptionRef.current = supabase
+      .channel(`reactions-${selectedEvent.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'timeline_event_reactions',
+        },
+        () => fetchTimelineEvents()
+      )
+      .subscribe();
+  };
+
+  const fetchTimelineEvents = async () => {
+    if (!selectedEvent) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('timeline_events')
+        .select(
+          `
+          *,
+          users (
+            id,
+            first_name,
+            last_name,
+            avatar_url
+          )
+        `
+        )
+        .eq('event_id', selectedEvent.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const eventsWithReactions = await Promise.all(
+        data.map(async (event) => {
+          const { data: reactions } = await supabase
+            .from('timeline_event_reactions')
+            .select('reaction')
+            .eq('timeline_event_id', event.id);
+
+          const reactionCounts = reactions?.reduce((acc, curr) => {
+            acc[curr.reaction] = (acc[curr.reaction] || 0) + 1;
+            return acc;
+          }, {});
+
+          return {
+            ...event,
+            reactions: reactionCounts || {},
+            created_at: new Date(event.created_at).getTime(),
+            uniqueKey: `${event.id}-${event.created_at}`,
+          };
+        })
+      );
+
+      setTimelineEvents(eventsWithReactions);
+    } catch (error) {
+      console.error('Error fetching timeline events:', error);
+    }
   };
 
   const handleAddAnnouncement = async (e) => {
@@ -143,9 +207,10 @@ export default function Tonight() {
 
       if (error) throw error;
       setAnnouncement('');
-      fetchTimelineEvents();
+      await fetchTimelineEvents();
     } catch (error) {
       console.error('Error adding announcement:', error);
+      Alert.alert('Error', 'Failed to add announcement');
     }
   };
 
@@ -170,24 +235,25 @@ export default function Tonight() {
 
       if (error) throw error;
       setSetTime({ description: '', scheduledTime: '' });
-      fetchTimelineEvents();
+      await fetchTimelineEvents();
     } catch (error) {
       console.error('Error adding set time:', error);
+      Alert.alert('Error', 'Failed to add set time');
     }
   };
 
   const handleDeleteTimelineEvent = async (eventId) => {
-    if (window.confirm('Are you sure you want to delete this event?')) {
+    try {
       const { error } = await supabase
         .from('timeline_events')
         .delete()
         .eq('id', eventId);
 
-      if (error) {
-        console.error('Error deleting event:', error);
-      } else {
-        fetchTimelineEvents();
-      }
+      if (error) throw error;
+      await fetchTimelineEvents();
+    } catch (error) {
+      console.error('Error deleting timeline event:', error);
+      Alert.alert('Error', 'Failed to delete event');
     }
   };
 
@@ -207,16 +273,26 @@ export default function Tonight() {
 
       if (error) throw error;
       setEditingEvent(null);
-      fetchTimelineEvents();
+      await fetchTimelineEvents();
     } catch (error) {
       console.error('Error updating event:', error);
+      Alert.alert('Error', 'Failed to update event');
     }
   };
 
+  if (loading) {
+    return <div className="loading">Loading...</div>;
+  }
+
+  if (!selectedEvent) {
+    return <div className="no-event">No active events</div>;
+  }
+
   return (
     <div className="h-full overflow-auto p-6 bg-[#262C36]">
+      <h2 className="text-2xl font-bold mb-6 text-white">Tonight's Timeline</h2>
+
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-white">Tonight's Timeline</h2>
         <select
           className="bg-[#151B23] text-white p-2 rounded"
           value={selectedEvent?.id || ''}
@@ -237,7 +313,6 @@ export default function Tonight() {
 
       {selectedEvent && (
         <div className="grid grid-cols-2 gap-6">
-          {/* Forms Section */}
           <div className="space-y-6">
             {/* Announcement Form */}
             <div className="bg-[#151B23] p-4 rounded-lg">
@@ -252,7 +327,6 @@ export default function Tonight() {
                     ? handleEditTimelineEvent
                     : handleAddAnnouncement
                 }
-                className="space-y-4"
               >
                 <textarea
                   value={
@@ -308,7 +382,6 @@ export default function Tonight() {
                     ? handleEditTimelineEvent
                     : handleAddSetTime
                 }
-                className="space-y-4"
               >
                 <input
                   type="text"
@@ -426,13 +499,13 @@ export default function Tonight() {
                           onClick={() => setEditingEvent(event)}
                           className="text-blue-400 hover:text-blue-300"
                         >
-                          <FiEdit2 size={16} />
+                          Edit
                         </button>
                         <button
                           onClick={() => handleDeleteTimelineEvent(event.id)}
                           className="text-red-400 hover:text-red-300"
                         >
-                          <FiTrash2 size={16} />
+                          Delete
                         </button>
                       </div>
                     </div>
