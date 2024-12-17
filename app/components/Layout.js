@@ -27,6 +27,7 @@ const navigation = [
   { name: 'Usuarios', href: '/users' },
   { name: 'Emails Aprobados', href: '/add-approved-email' },
   { name: 'Notificaciones', href: '/notifications' },
+  { name: 'Tonight', href: '/tonight' },
 ];
 
 const userNavigation = [
