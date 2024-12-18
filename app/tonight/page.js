@@ -290,7 +290,7 @@ export default function TonightPage() {
 
   return (
     <div className="h-full overflow-auto p-6 bg-[#262C36]">
-      <h2 className="text-2xl font-bold mb-6 text-white">Tonight's Timeline</h2>
+      <h2 className="text-2xl font-bold mb-6 text-white">Timeline</h2>
 
       <div className="flex justify-between items-center mb-6">
         <select
@@ -427,7 +427,7 @@ export default function TonightPage() {
                           scheduledTime: newTime,
                         }));
                   }}
-                  className="w-full p-2 bg-[#262C36] text-white rounded"
+                  className="w-full mt-3 p-2 bg-[#262C36] text-white rounded"
                   required
                 />
                 <div className="flex gap-2">
