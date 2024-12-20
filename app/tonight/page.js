@@ -68,7 +68,7 @@ export default function TonightPage() {
       const activeEvents = allEvents.filter((event) => {
         const eventDate = new Date(event.event_date);
         const eventWindow = {
-          start: subHours(eventDate, 2),
+          start: subHours(eventDate, 36),
           end: addHours(eventDate, 36),
         };
         return isWithinInterval(now, eventWindow);
@@ -146,22 +146,22 @@ export default function TonightPage() {
       .subscribe();
   };
 
+  // In app/tonight/page.js (admin)
   const fetchTimelineEvents = async () => {
     if (!selectedEvent) return;
-
     try {
       const { data, error } = await supabase
         .from('timeline_events')
         .select(
           `
-          *,
-          users (
-            id,
-            first_name,
-            last_name,
-            avatar_url
-          )
-        `
+        *,
+        users (
+          id,
+          first_name,
+          last_name,
+          avatar_url
+        )
+      `
         )
         .eq('event_id', selectedEvent.id)
         .order('created_at', { ascending: false });
